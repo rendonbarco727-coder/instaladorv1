@@ -58,3 +58,4 @@ sesion.tar.gz
 *.tar.gz
 ecosystem.config.js
 ecosystem.config.cjs
+ecosystem.config.example.js
