@@ -1,0 +1,79 @@
+{
+  "133930166526009@lid": {
+    "ultimo_recordatorio": {
+      "datos": {
+        "recordId": "1773288540839",
+        "id": "133930166526009@lid",
+        "mensaje": "todo los días  lo que dice mi Oroscopo soy scorpio",
+        "fecha": 1773320400000,
+        "recurrente": false,
+        "accion": null,
+        "ciudad": "Monterrey"
+      },
+      "timestamp": 1773288540842
+    },
+    "ultimaAccion": "lista_recordatorios_indexada",
+    "lista_recordatorios": {
+      "datos": [
+        {
+          "recordId": "1773288540839",
+          "id": "133930166526009@lid",
+          "mensaje": "todo los días  lo que dice mi Oroscopo soy scorpio",
+          "fecha": 1773320400000,
+          "recurrente": false,
+          "accion": null,
+          "ciudad": "Monterrey"
+        }
+      ],
+      "timestamp": 1773288670049
+    },
+    "lista_recordatorios_indexada": {
+      "datos": [
+        {
+          "recordId": "1773288540839",
+          "id": "133930166526009@lid",
+          "mensaje": "todo los días  lo que dice mi Oroscopo soy scorpio",
+          "fecha": 1773320400000,
+          "recurrente": false,
+          "accion": null,
+          "ciudad": "Monterrey",
+          "numero": 1
+        }
+      ],
+      "timestamp": 1773288670050
+    }
+  },
+  "100365164921028@lid": {
+    "lista_recordatorios": {
+      "datos": [
+        {
+          "recordId": "1774838174439",
+          "id": "100365164921028@lid",
+          "mensaje": "recuérdame tomar agua en 1 minuto",
+          "fecha": 1774838234438,
+          "recurrente": false,
+          "accion": null,
+          "ciudad": "Monterrey"
+        }
+      ],
+      "timestamp": 1774838174517
+    },
+    "ultimaAccion": "lista_recordatorios",
+    "lista_recordatorios_indexada": {
+      "datos": [],
+      "timestamp": 1774838126463
+    },
+    "ultimo_recordatorio": {
+      "datos": {
+        "recordId": "1774838174439",
+        "id": "100365164921028@lid",
+        "mensaje": "recuérdame tomar agua en 1 minuto",
+        "fecha": 1774838234438,
+        "recurrente": false,
+        "accion": null,
+        "ciudad": "Monterrey"
+      },
+      "timestamp": 1774838174514
+    }
+  }
+}

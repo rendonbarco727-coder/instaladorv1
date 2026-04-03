@@ -1,0 +1,60 @@
+node_modules/
+auth_session/
+.wwebjs_auth/
+.wwebjs_cache/
+.env
+backups/
+*.log
+*.json.bak
+memoria_usuarios.json
+historial.json
+recordatorios.json
+autoeval.json
+voluntad.json
+plan_objetivos.json
+debate_log.json
+musica_biblioteca/
+temp_files/
+archivos_usuarios/
+historiales/
+data/
+logs/
+
+# Bases de datos con datos sensibles
+*.db
+*.sqlite
+cognicion/*.db
+
+# Backups de sandbox
+sandbox/*.bridge_backup_*
+
+# Archivos de datos personales
+receta_donas*
+precio_dolar*
+amazon_cookies*
+ultimo_error.json
+propuesta_pendiente.json
+autonomia.json
+metas.json
+retos_diarios.json
+experimentos.json
+evoluciones.json
+*.json.bak
+
+# Seguridad
+.env
+*.env
+auth_session/
+amazon_cookies.txt
+amazon_cookies.json
+amazon_netscape.txt
+
+# Runtime
+*.log
+auth/
+memory/
+backups/
+sesion.tar.gz
+*.tar.gz
+ecosystem.config.js
+ecosystem.config.cjs

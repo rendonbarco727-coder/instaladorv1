@@ -1,0 +1,40 @@
+module.exports = {
+  apps: [{
+    name: "bmo",
+    script: "index.js",
+    cwd: "/home/ruben/wa-ollama",
+    interpreter: "node",
+    env: {
+      "GROQ_API_KEY": "TU_KEY_AQUI",
+      "MISTRAL_API_KEY": "TU_KEY_AQUI",
+      "TOMTOM_API_KEY": "TU_KEY_AQUI",
+      "GITHUB_TOKEN": "TU_KEY_AQUI",
+      "GIST_ID": "af6bf93648a54d971c89fe0ae8d37d46",
+      "HASS_TOKEN": "TU_KEY_AQUI",
+      "HASS_URL": "TU_KEY_AQUI",
+      "ADMIN_NUMBERS": "527351838760,100365164921028,528123716915",
+      "OLLAMA_NUM_PARALLEL": "1",
+      "OLLAMA_MAX_LOADED_MODELS": "1",
+      "OLLAMA_FLASH_ATTENTION": "1",
+      "GEMINI_API_KEY": "TU_KEY_AQUI",
+      "EXA_API_KEY": "TU_KEY_AQUI",
+      "GMAIL_USER": "rendonbarco727@gmail.comMISTRAL_AGENT_ID=ag_019c9ddf5bad70e78521017419c24d58",
+      "GEMINI_API_KEY_2": "TU_KEY_AQUI",
+      "GEMINI_API_KEY_3": "TU_KEY_AQUI",
+      "GEMINI_API_KEY_4": "TU_KEY_AQUI",
+      "GEMINI_API_KEY_5": "TU_KEY_AQUI",
+      "GROK_API_KEY_1": "TU_KEY_AQUI",
+      "GROK_API_KEY_2": "TU_KEY_AQUI",
+      "GROK_API_KEY_3": "TU_KEY_AQUI",
+      "GROK_API_KEY_4": "TU_KEY_AQUI",
+      "OPENAI_API_KEY_1": "TU_KEY_AQUI",
+      "OPENAI_API_KEY_2": "TU_KEY_AQUI",
+      "OPENAI_API_KEY_3": "TU_KEY_AQUI",
+      "GROQ_API_KEY_2": "TU_KEY_AQUI",
+      "GROQ_API_KEY_3": "TU_KEY_AQUI",
+      "GROQ_API_KEY_4": "TU_KEY_AQUI",
+      "OPENWEATHER_API_KEY": "TU_KEY_AQUI",
+      "HUGGINGFACE_API_KEY": "TU_KEY_AQUI"
+    }
+  }]
+};

@@ -1,0 +1,1324 @@
+import { activeDocuments } from "../core/document_state.js";
+import { exec } from 'child_process';
+import { buscarWebExa } from './buscar_web_exa.js';
+import { leerWeb } from './leer_web.js';
+import { promisify } from 'util';
+import fs from 'fs';
+import { callModel } from '../core/model_router.js';
+import { registrarToolUsage } from '../observability/metrics.js';
+import { logError } from '../observability/errors.js';
+
+const execAsync = promisify(exec);
+
+const COMANDOS_PROHIBIDOS = ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:', 'chmod 777 /'];
+
+const TOOLS = {
+
+    leer_web: async (input) => {
+        const url = String(input).trim();
+        console.log(`[TOOL] leer_web | ${url.slice(0, 80)}`);
+        return await leerWeb(url);
+    },
+
+    buscar_web_exa: async (input, ctx) => {
+        // Usar sesionId específico para no compartir contador entre tareas paralelas
+        const sesionId = ctx?.sesionId || `exa_${ctx?.userId || 'global'}_${Date.now()}`;
+        console.log(`[TOOL] buscar_web_exa | ${String(input).slice(0, 80)}`);
+        const resultado = await buscarWebExa(String(input), sesionId);
+        if (resultado) return resultado;
+        return 'Sin resultados en EXA para: ' + String(input).slice(0, 60);
+    },
+
+    buscar_web: async (input) => {
+        // Detectar consultas de noticias — intentar RSS primero
+        const esNoticias = /noticia|noticias|ultimas|acontecer|hoy en|qué pasó/i.test(input);
+        const esMexico = /m[eé]xico|mexicano|cdmx|monterrey|guadalajara/i.test(input);
+        if (esNoticias) {
+            const fuentes = esMexico ? [
+                'https://feeds.bbci.co.uk/mundo/mexico/rss.xml',
+                'https://www.eluniversal.com.mx/arc/outboundfeeds/rss/'
+            ] : [
+                'https://feeds.bbci.co.uk/mundo/rss.xml'
+            ];
+            for (const fuente of fuentes) {
+                try {
+                    const tmpRss = `/tmp/rss_${Date.now()}.sh`;
+                    const fs2 = await import('fs');
+                    fs2.default.writeFileSync(tmpRss, `curl -s --max-time 8 "${fuente}" | grep -o '<title>[^<]*</title>' | head -6 | sed 's/<[^>]*>//g'`);
+                    const { stdout } = await execAsync(`bash ${tmpRss}`);
+                    fs2.default.unlinkSync(tmpRss);
+                    const titulos = stdout.trim().split('\n').filter(t => t.length > 10 && !t.includes('RSS') && !t.includes('BBC Mundo')).slice(0,5);
+                    if (titulos.length >= 2) return '📰 Noticias de México:\n' + titulos.join('\n');
+                } catch(e) {}
+            }
+        }
+
+                // Circuit breaker: si falló 3 veces en los últimos 60s, no reintentar
+        const ahora = Date.now();
+        if (!global._webCircuit) global._webCircuit = { fallos: 0, ultimoFallo: 0 };
+        const cb = global._webCircuit;
+        if (cb.fallos >= 5 && (ahora - cb.ultimoFallo) < 30000) {
+            console.log('[CIRCUIT_BREAKER] buscar_web bloqueado por fallos recientes');
+            return `Sin resultados (circuit breaker activo por ${Math.round((60000-(ahora-cb.ultimoFallo))/1000)}s)`;
+        }
+
+        const query = encodeURIComponent(input);
+        try {
+            // Intentar DuckDuckGo instant answers
+            const { stdout } = await execAsync(`curl -s --max-time 10 "https://api.duckduckgo.com/?q=${query}&format=json&no_html=1&skip_disambig=1"`);
+            const data = JSON.parse(stdout);
+            const abstract = data.AbstractText || '';
+            const answer = data.Answer || '';
+            const related = (data.RelatedTopics || []).slice(0, 3).map(t => t.Text || '').filter(t => t.length > 20).join('. ');
+            const resultado = answer || abstract || related;
+            if (resultado && resultado.length > 15) {
+                if (global._webCircuit) global._webCircuit.fallos = 0;
+                return resultado.slice(0, 800);
+            }
+        } catch(e) {}
+        try {
+            // Fallback: DuckDuckGo HTML search scraping ligero
+            const { stdout } = await execAsync(`curl -s --max-time 12 -A "Mozilla/5.0" "https://html.duckduckgo.com/html/?q=${query}" | grep -o '<a class="result__snippet">[^<]*</a>' | head -3 | sed 's/<[^>]*>//g'`);
+            const texto = stdout.trim();
+            if (texto && texto.length > 15) return texto.slice(0, 800);
+        } catch(e) {}
+        try {
+            // Fallback 2: Wikipedia en español
+            const termino = encodeURIComponent(input.replace(/hoy|precio|actual|cotizacion/gi,'').trim());
+            const { stdout } = await execAsync(`curl -s --max-time 10 "https://es.wikipedia.org/api/rest_v1/page/summary/${termino}"`);
+            const wiki = JSON.parse(stdout);
+            if (wiki.extract && wiki.extract.length > 30) return wiki.extract.slice(0, 600);
+        } catch(e) {}
+        // Registrar fallo en circuit breaker
+        if (!global._webCircuit) global._webCircuit = { fallos: 0, ultimoFallo: 0 };
+        global._webCircuit.fallos++;
+        global._webCircuit.ultimoFallo = Date.now();
+        setTimeout(() => { if (global._webCircuit) { global._webCircuit.fallos = 0; global._webCircuit.ultimoFallo = 0; } }, 60000);
+        return `No encontré información sobre: ${input}`;
+    },
+
+    buscar_precio: async (input) => {
+        const inputLower = input.toLowerCase();
+        // Crypto
+        const cryptoMap = { bitcoin:'bitcoin', btc:'bitcoin', ethereum:'ethereum', eth:'ethereum', solana:'solana', sol:'solana', doge:'dogecoin', xrp:'ripple', bnb:'binancecoin', ada:'cardano' };
+        const cryptoKey = Object.keys(cryptoMap).find(k => inputLower.includes(k));
+        if (cryptoKey) {
+            try {
+                const id = cryptoMap[cryptoKey];
+                const { stdout } = await execAsync(`curl -s --max-time 10 "https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd,mxn"`);
+                const data = JSON.parse(stdout);
+                const info = data[id];
+                if (info) return `${id.charAt(0).toUpperCase()+id.slice(1)}: $${info.usd} USD / $${info.mxn} MXN`;
+            } catch(e) {}
+        }
+        // Divisas
+        if (/d[oó]lar|usd|euro|eur|libra|gbp|divisa|tipo de cambio|cambio/i.test(input)) {
+            try {
+                const par = inputLower.includes('euro') ? 'EUR' : inputLower.includes('libra') ? 'GBP' : 'USD';
+                const { stdout } = await execAsync(`curl -s --max-time 10 "https://api.frankfurter.app/latest?from=${par}&to=MXN,USD,EUR"`);
+                const fx = JSON.parse(stdout);
+                if (fx.rates) {
+                    const rates = Object.entries(fx.rates).map(([k,v]) => `${k}: ${v}`).join(' | ');
+                    return `Tipo de cambio ${par}: ${rates} (${fx.date})`;
+                }
+            } catch(e) {}
+        }
+        return `No encontré precio para: ${input}`;
+    },
+
+    buscar_clima: async (input) => {
+        // Limpiar input — extraer solo nombre de ciudad (quitar datos previos inyectados)
+        let ciudad = input
+            .replace(/Ciudad no encontrada:\s*/gi, '')
+            .replace(/\d+\.?\d*°C.*/g, '')
+            .replace(/viento.*/gi, '')
+            .replace(/hace \d+ días?/gi, '')
+            .replace(/clima en|el clima de|tiempo en/gi, '')
+            .trim()
+            .split('\n')[0]
+            .split(':')[0]
+            .trim();
+        if (!ciudad || ciudad.length < 2) ciudad = input.split(':')[0].trim();
+        // Quitar sufijos de país como ", MX" ", Mexico" ", NL" que confunden al geocoder
+        ciudad = ciudad.replace(/,?\s*(MX|Mexico|México|NL|Nuevo León|NL|BC|CDMX)$/gi, '').trim();
+        const city = encodeURIComponent(ciudad);
+        const geo = JSON.parse((await execAsync(`curl -s --max-time 8 "https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1"`)).stdout);
+        const loc = geo.results?.[0];
+        if (!loc) return `Ciudad no encontrada: ${ciudad}`;
+        const w = JSON.parse((await execAsync(`curl -s --max-time 8 "https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current_weather=true&hourly=relativehumidity_2m"`)).stdout);
+        const cw = w.current_weather;
+        const humedad = w.hourly?.relativehumidity_2m?.[0] || 'N/A';
+        return `${loc.name}, ${loc.country_code}: ${cw.temperature}°C, viento ${cw.windspeed} km/h, humedad ${humedad}%`;
+    },
+
+    ejecutar_terminal: async (input) => {
+        // SANITIZACION: bloquear solo inyeccion real
+        const cmdCheck = input.startsWith('cwd:') ? input.split('|').slice(1).join('|') : input;
+        const tieneInyeccion = (
+            cmdCheck.includes('`') ||
+            cmdCheck.includes('$(') ||
+            /;\s*(rm|curl|wget|bash|sh|python|nc|ncat|chmod)/.test(cmdCheck)
+        );
+        if (tieneInyeccion) {
+            console.log('[SEGURIDAD] Bloqueado: ' + input.slice(0,50));
+            return 'Comando bloqueado por seguridad';
+        }
+        if (COMANDOS_PROHIBIDOS.some(cmd => input.includes(cmd))) return 'Comando prohibido';
+        // Soporte para cwd: "cwd:/ruta|comando"
+        let cwd = '/home/ruben/wa-ollama';
+        let cmd = input;
+        if (input.startsWith('cwd:')) {
+            const sep = input.indexOf('|');
+            if (sep !== -1) {
+                cwd = input.slice(4, sep).trim();
+                cmd = input.slice(sep + 1).trim();
+            }
+        }
+        // Filtrar comandos que son texto plano (no ejecutables)
+        if (/^[A-ZÁÉÍÓÚ]/.test(cmd) && !cmd.startsWith('/') && !cmd.includes('&&') && !cmd.includes('git') && !cmd.includes('gh') && !cmd.includes('npm')) {
+            return 'Error: input no es un comando válido';
+        }
+        try {
+            const { stdout, stderr } = await execAsync(cmd, { timeout: 60000, cwd });
+            return (stdout || stderr || 'OK').slice(0, 2000);
+        } catch(e) {
+            return `Error en ejecutar_terminal: ${e.message.slice(0, 500)}`;
+        }
+    },
+
+    generar_contenido: async (input, ctx) => {
+        // Si hay documento activo, agregar contexto conversacional
+        const docActivo = ctx?.active_document;
+        if (docActivo && !input.includes('RESULTADO_')) {
+            const ext = docActivo.split('.').pop();
+            const tipos = { xlsx: 'Excel', docx: 'Word', pptx: 'PowerPoint' };
+            const tipo = tipos[ext] || 'documento';
+            const nombre = docActivo.split('/').pop();
+            input = `[Contexto: Tienes un ${tipo} activo: ${nombre}. Responde de forma natural y amigable como asistente personal. Si te preguntan algo fuera del documento, responde brevemente y ofrece continuar con el ${tipo}] ${input}`;
+        }
+        // Si el input ya contiene datos reales, devolverlos directamente sin llamar a Mistral
+        const yaTieneDatos = (
+            (input.includes('USD') && input.includes('MXN')) ||
+            (input.includes('°C') && input.includes('km/h')) ||
+            (input.includes('Bitcoin:') || input.includes('Ethereum:')) ||
+            /Tipo de cambio.+\d+\.\d+/.test(input)
+        );
+        if (yaTieneDatos) {
+            // Extraer solo la línea con los datos
+            const linea = input.split('\n').find(l =>
+                l.includes('USD') || l.includes('°C') || l.includes('Bitcoin') || l.includes('Tipo de cambio')
+            ) || input;
+            return linea.trim().slice(0, 500);
+        }
+        return await callModel('generacion', `Genera el siguiente contenido completo en español, sin preámbulos ni notas al final: ${input}`, { max_tokens: 1500 });
+    },
+
+    escribir_archivo: async (input) => {
+        const idx = input.indexOf('|');
+        if (idx === -1) return 'Formato: ruta|contenido';
+        const ruta = input.slice(0, idx).trim();
+        const contenido = input.slice(idx + 1).trim();
+        fs.writeFileSync(ruta, contenido, 'utf8');
+        return `Guardado: ${ruta}`;
+    },
+
+    leer_archivo: async (input) => {
+        return fs.readFileSync(input.trim(), 'utf8').slice(0, 2000);
+    },
+
+    estado_sistema: async () => {
+        const { stdout } = await execAsync(
+            `echo "CPU:$(top -bn1 | grep 'Cpu(s)' | awk '{print $2}')%" && ` +
+            `free -h | awk '/Mem/{print "RAM: "$3"/"$2}' && ` +
+            `df -h / | awk 'NR==2{print "Disco: "$3"/"$2" ("$5")"}' && ` +
+            `(vcgencmd measure_temp 2>/dev/null || echo "Temp: N/A")`
+        );
+        return stdout.trim();
+    },
+
+    instalar_software: async (input) => {
+        await execAsync(`sudo apt-get install -y ${input} 2>&1`, { timeout: 120000 });
+        return `Instalado: ${input}`;
+    },
+
+    controlar_servicio: async (input) => {
+        const parts = input.trim().split(' ');
+        const servicio = parts[0], accion = parts[1] || 'status';
+        const { stdout } = await execAsync(`sudo systemctl ${accion} ${servicio} 2>&1`);
+        return stdout || `${servicio} ${accion}`;
+    },
+
+    crear_documento: async (input, ctx) => {
+        const { crearDocumento } = await import('../evoluciones/agente_autonomo.js');
+        const result = await crearDocumento(input, ctx.userId, ctx.clienteWA);
+        // result ahora es la ruta directamente (string) o null si falló
+        if (result && typeof result === 'string' && result.startsWith('/tmp/')) {
+            ctx.active_document = result;
+            if (ctx.userId) activeDocuments.set(ctx.userId, result);
+            console.log(`[TOOL] crear_documento → active_document=${result}`);
+            return result;
+        }
+        return 'Documento creado y enviado';
+    },
+
+    editar_documento: async (input, ctx) => {
+        const fsEd = await import('fs');
+        const { exec: execEd } = await import('child_process');
+        const { promisify: promisifyEd } = await import('util');
+        const execAsyncEd = promisifyEd(execEd);
+
+        // input formato: "ruta|instruccion" o solo instruccion si ctx.active_document existe
+        let ruta = ctx?.active_document || '';
+        let instruccion = String(input);
+        // Formato especial desde CONTINUITY: "editar_documento|ruta|instruccion"
+        const partsInput = String(input).split('|');
+        if (partsInput.length >= 2) {
+            const posibleRuta = partsInput[0].trim();
+            if (posibleRuta.startsWith('/tmp/') && posibleRuta.endsWith('.docx')) {
+                ruta = posibleRuta;
+                instruccion = partsInput.slice(1).join('|').trim();
+            } else if (partsInput.length >= 2) {
+                ruta = partsInput[0].trim() || ruta;
+                instruccion = partsInput.slice(1).join('|').trim();
+            }
+        }
+
+        if (!ruta || !fsEd.default.existsSync(ruta)) {
+            // Si no hay documento activo, crear uno nuevo
+            const { crearDocumento } = await import('../evoluciones/agente_autonomo.js');
+            await crearDocumento(instruccion, ctx.userId, ctx.clienteWA);
+            return 'Documento creado y enviado (no había documento activo para editar)';
+        }
+
+        // Leer contenido actual del docx con python
+        const tmpScript = `/tmp/read_doc_${Date.now()}.py`;
+        const tmpOut = `/tmp/doc_content_${Date.now()}.txt`;
+        fsEd.default.writeFileSync(tmpScript, `
+from docx import Document
+import sys
+doc = Document('${ruta}')
+text = '\n'.join([p.text for p in doc.paragraphs if p.text.strip()])
+with open('${tmpOut}', 'w') as f:
+    f.write(text[:3000])
+`);
+        const { promisify } = await import('util');
+        const { exec } = await import('child_process');
+        
+
+        try { await execAsyncEd(`python3 ${tmpScript}`); } catch(e) {}
+        let contenidoActual = '';
+        try { contenidoActual = fsEd.default.readFileSync(tmpOut, 'utf8'); } catch(e) {}
+        try { fsEd.default.unlinkSync(tmpScript); fsEd.default.unlinkSync(tmpOut); } catch(e) {}
+
+        // Pasar a crearDocumento con el contenido actual + instrucción de edición
+        const instruccionCompleta = contenidoActual
+            ? `Edita y mejora este documento existente:\n${contenidoActual}\n\nInstrucción de edición: ${instruccion}`
+            : instruccion;
+
+        // Appendar contenido nuevo via Python leyendo JSON (evita problemas de escape)
+        const { execSync: execSyncEd2 } = await import('child_process');
+        const tsApp = Date.now();
+        const tmpJsonApp = `/tmp/bmo_app_${tsApp}.json`;
+        const tmpPyApp   = `/tmp/bmo_app_${tsApp}.py`;
+        fsEd.default.writeFileSync(tmpJsonApp, JSON.stringify({ ruta, contenido: instruccion }));
+        const pyScript = `import json
+from docx import Document
+from docx.shared import Pt, RGBColor
+
+with open('${tmpJsonApp}', encoding='utf-8') as f:
+    data = json.load(f)
+
+doc = Document(data['ruta'])
+doc.add_paragraph()
+
+for linea in data['contenido'].split('\\n'):
+    linea = linea.strip().lstrip('*#|-: ').strip()
+    if not linea or linea.startswith('http') or linea.startswith('🔗'):
+        continue
+    if linea.startswith('**') and linea.endswith('**'):
+        p = doc.add_paragraph()
+        run = p.add_run(linea.strip('*'))
+        run.bold = True
+        run.font.size = Pt(12)
+        run.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+    elif linea.startswith('###') or linea.startswith('##'):
+        p = doc.add_paragraph()
+        run = p.add_run(linea.lstrip('#').strip())
+        run.bold = True
+        run.font.size = Pt(11)
+        run.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+    else:
+        doc.add_paragraph(linea)
+
+doc.save(data['ruta'])
+print('OK')
+`;
+        fsEd.default.writeFileSync(tmpPyApp, pyScript);
+        let appendOk = false;
+        try {
+            execSyncEd2(`python3 ${tmpPyApp}`);
+            appendOk = true;
+            console.log('[TOOL] append OK via JSON');
+        } catch(e) {
+            console.log('[TOOL] append falló:', e.message.slice(0, 100));
+        }
+        try { fsEd.default.unlinkSync(tmpPyApp); fsEd.default.unlinkSync(tmpJsonApp); } catch(e) {}
+
+        if (!appendOk) {
+            const { crearDocumento } = await import('../evoluciones/agente_autonomo.js');
+            await crearDocumento(instruccionCompleta, ctx.userId, ctx.clienteWA, ruta, false, false, true);
+        }
+
+        // Enviar archivo actualizado
+        if (fsEd.default.existsSync(ruta)) {
+            const wwjs = await import('whatsapp-web.js');
+            const MM = wwjs.MessageMedia || wwjs.default?.MessageMedia;
+            const fileData = fsEd.default.readFileSync(ruta);
+            const media = new MM('application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileData.toString('base64'), 'documento.docx');
+            await ctx.clienteWA.sendMessage(ctx.userId, media, { caption: '📄 Documento actualizado' });
+        }
+        return `ok`;
+    },
+
+    github_manager: async (input, ctx) => {
+        // Operaciones: list_repos, list_files, read_file, delete_file, list_commits
+        const parts = String(input).split('|');
+        const operacion = parts[0]?.trim().toLowerCase();
+        const param1 = parts[1]?.trim() || '';
+        const param2 = parts[2]?.trim() || '';
+
+        const token = process.env.GITHUB_TOKEN || '';
+        if (!token) return 'GitHub no configurado. Escribe: bmo integraciones';
+
+        const { execSync: execS } = await import('child_process');
+        const gh = (url, method='GET', body=null) => {
+            const bodyFlag = body ? `-d '${JSON.stringify(body)}'` : '';
+            const r = execS(`curl -s --max-time 10 -X ${method} -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" ${bodyFlag} "https://api.github.com/${url}"`, {encoding:'utf8'});
+            return JSON.parse(r);
+        };
+
+        try {
+            if (operacion === 'repos' || operacion === 'list_repos') {
+                const repos = gh('user/repos?sort=updated&per_page=10');
+                return 'Tus repos recientes:\n' + repos.map((r,i) => `${i+1}. ${r.name} (${r.private?'privado':'publico'}) - ${r.updated_at?.slice(0,10)}`).join('\n');
+            }
+            if (operacion === 'files' || operacion === 'list_files') {
+                const repo = param1 || 'bmo-jarvis-hub';
+                const path2 = param2 || '';
+                const user = gh('user').login;
+                const files = gh(`repos/${user}/${repo}/contents/${path2}`);
+                if (!Array.isArray(files)) return 'No se pudo listar: ' + (files.message||'');
+                return `Archivos en ${repo}/${path2}:\n` + files.map((f,i) => `${i+1}. ${f.type==='dir'?'📁':'📄'} ${f.name} ${f.size?'('+Math.round(f.size/1024)+'kb)':''}`).join('\n');
+            }
+            if (operacion === 'commits') {
+                const repo = param1 || 'bmo-jarvis-hub';
+                const user = gh('user').login;
+                const commits = gh(`repos/${user}/${repo}/commits?per_page=8`);
+                return `Ultimos commits en ${repo}:\n` + commits.map((c,i) => `${i+1}. ${c.commit?.message?.slice(0,60)} (${c.commit?.author?.date?.slice(0,10)})`).join('\n');
+            }
+            if (operacion === 'delete') {
+                const repo = param1;
+                const archivo = param2;
+                if (!repo || !archivo) return 'Formato: delete|repo|archivo.html';
+                const user = gh('user').login;
+                const fileInfo = gh(`repos/${user}/${repo}/contents/${archivo}`);
+                if (fileInfo.message) return 'Archivo no encontrado: ' + fileInfo.message;
+                gh(`repos/${user}/${repo}/contents/${archivo}`, 'DELETE', { message: `Eliminado por BMO`, sha: fileInfo.sha });
+                return `Archivo ${archivo} eliminado de ${repo}`;
+            }
+            if (operacion === 'pages' || operacion === 'mis_paginas') {
+                const repo = param1 || 'bmo-jarvis-hub';
+                const user = gh('user').login;
+                const files = gh(`repos/${user}/${repo}/contents/`);
+                if (!Array.isArray(files)) return 'Error: ' + (files.message||'');
+                const htmlFiles = files.filter(f => f.name.endsWith('.html'));
+                return `Paginas en ${repo}:\n` + htmlFiles.map((f,i) => `${i+1}. ${f.name}\n   https://${user}.github.io/${repo}/${f.name}`).join('\n');
+            }
+            return 'Operaciones disponibles: repos, files|repo, commits|repo, delete|repo|archivo, pages|repo';
+        } catch(e) {
+            return 'Error GitHub: ' + e.message.slice(0,100);
+        }
+    },
+
+    generar_html: async (input, ctx) => {
+        // Generar HTML completo usando Gemini/Mistral
+        const { callModel } = await import('../core/model_router.js');
+        const inputLimpio = String(input).replace(/\[Contexto:.*?\]/gs, '').trim();
+        const html = await callModel('generacion',
+            'Genera SOLO el código HTML completo para: ' + inputLimpio + '\n\nREGLAS ESTRICTAS:\n1. SOLO devuelve HTML puro, nada mas\n2. Empieza con <!DOCTYPE html> y termina con </html>\n3. CSS dentro de <style>\n4. Diseño moderno, responsive, colores bonitos\n5. PROHIBIDO: explicaciones, comentarios fuera del HTML, markdown, backticks',
+            { max_tokens: 2000, temperature: 0.5 }
+        );
+        // Limpiar backticks si el modelo los incluyó
+        // Limpiar cualquier texto fuera del HTML
+        let limpio = html.trim();
+        // Quitar backticks
+        limpio = limpio.replace(/^[`]{3}[a-z]*\n?/i, '').replace(/[`]{3}\s*$/,'').trim();
+        // Extraer solo desde <!DOCTYPE hasta </html>
+        const htmlMatch = limpio.match(/<!DOCTYPE[\s\S]*<\/html>/i);
+        if (htmlMatch) limpio = htmlMatch[0];
+
+        return limpio;
+    },
+
+    publicar_github: async (input, ctx) => {
+        // input formato: "ruta_archivo|mensaje_commit|repo_destino(opcional)"
+        const fs2 = await import('fs');
+        const inputStr = String(input);
+
+        // Separar por || para el nombre (evitar conflicto con | en HTML)
+        const partsDoble = inputStr.split('||');
+        const contenidoORuta = partsDoble[0]?.trim();
+        let nombreArchivo = partsDoble[1]?.trim() || 'pagina.html';
+        const mensajeCommit = 'Publicado por BMO: ' + nombreArchivo;
+
+        let rutaArchivo = contenidoORuta;
+        if (contenidoORuta.startsWith('<!DOCTYPE') || contenidoORuta.startsWith('<html') || contenidoORuta.includes('<body')) {
+            // Extraer nombre del <title> del HTML
+            let nombre = nombreArchivo;
+            const titleMatch = contenidoORuta.match(/<title[^>]*>([^<]+)<\/title>/i);
+            if (titleMatch && titleMatch[1]) {
+                nombre = titleMatch[1].toLowerCase()
+                    .replace(/[^a-z0-9]/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^_|_$/g, '')
+                    .slice(0, 40) + '.html';
+            }
+            const tmpPath = '/tmp/' + nombre;
+            fs2.default.writeFileSync(tmpPath, contenidoORuta, 'utf8');
+            rutaArchivo = tmpPath;
+            // Actualizar nombreArchivo para la URL
+            nombreArchivo = nombre;
+        }
+        const { exec: execG } = await import('child_process');
+        const { promisify: prom } = await import('util');
+        const execA = prom(execG);
+
+        // Verificar que el archivo existe
+        if (!rutaArchivo || !fs2.default.existsSync(rutaArchivo)) {
+            return 'No encontre el archivo: ' + rutaArchivo;
+        }
+
+        // Leer configuracion de git
+        const gitConfig = '/home/ruben/dashboard';
+        try {
+            // Detectar tipo de archivo y destino
+            const nombre = nombreArchivo || rutaArchivo.split('/').pop() || 'pagina.html';
+            const ext = nombre.split('.').pop().toLowerCase();
+
+            // Copiar archivo al repo
+            fs2.default.copyFileSync(rutaArchivo, `${gitConfig}/${nombre}`);
+
+            // Git add, commit, push
+            await execA(`cd ${gitConfig} && git add ${nombre}`);
+            await execA(`cd ${gitConfig} && git commit -m "${mensajeCommit.replace(/"/g, "'")}"`);
+            const { stdout } = await execA(`cd ${gitConfig} && git push origin main`);
+
+            // Construir URL publica
+            const remoteUrl = (await execA(`cd ${gitConfig} && git remote get-url origin`)).stdout.trim();
+            const match = remoteUrl.match(/github\.com[/:](.*?)\/(.*?)(\.git)?$/);
+            let urlPublica = '';
+            if (match) {
+                const [,user, repo] = match;
+                urlPublica = `https://${user}.github.io/${repo}/${nombre}`;
+            }
+
+            return 'Publicado en GitHub.' + (urlPublica ? ' URL: ' + urlPublica : '');
+        } catch(e) {
+            // Si no hay cambios
+            if (e.message.includes('nothing to commit')) return 'El archivo ya esta actualizado en GitHub.';
+            // Si no hay git configurado
+            if (e.message.includes('not a git repository')) return 'ERROR_GIT_NO_CONFIGURADO';
+            return 'Error publicando: ' + e.message.slice(0, 150);
+        }
+    },
+
+    enviar_mensaje: async (input, ctx) => {
+        // Detectar si el input es una ruta de archivo para enviar
+        const rutaMatch = String(input).match(/(\/tmp\/[\w._-]+\.(xlsx|pptx|docx|pdf))/);
+        if (rutaMatch && ctx?.clienteWA && ctx?.userId) {
+            try {
+                const fsM = await import('fs');
+                const ruta = rutaMatch[1];
+                if (fsM.default.existsSync(ruta)) {
+                    const wwjs = await import('whatsapp-web.js');
+                    const MM = wwjs.MessageMedia || wwjs.default?.MessageMedia;
+                    const fileData = fsM.default.readFileSync(ruta);
+                    const ext = ruta.split('.').pop();
+                    const mimes = {
+                        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        pdf: 'application/pdf'
+                    };
+                    const nombres = { xlsx: 'archivo.xlsx', pptx: 'presentacion.pptx', docx: 'documento.docx', pdf: 'documento.pdf' };
+                    const media = new MM(mimes[ext], fileData.toString('base64'), nombres[ext]);
+                    const emojis = { xlsx: '📊', pptx: '📽️', docx: '📄', pdf: '📑' };
+                    await ctx.clienteWA.sendMessage(ctx.userId, media, { caption: `${emojis[ext]||'📎'} Archivo listo` });
+                    return `ok`;
+                }
+            } catch(e) { console.log('[SEND_FILE] Error:', e.message); }
+        }
+        let texto = String(input).replace(/\/tmp\/bmo_doc_[\w.]+/g, '').replace(/Documento editado y enviado:/gi, '').replace(/Reporte.*guardado en.*/gi, 'Documento listo ✅').trim()
+            .replace(/^\[/, '').replace(/\]$/, '')
+            .replace(/^Aquí tienes el contenido completo en español[:\s]*/i, '')
+            .replace(/^Aquí está[:\s]*/i, '')
+            .replace(/¿Necesitas algún ajuste[^?]*\?/gi, '')
+            .replace(/\n---\n*$/, '')
+            .trim();
+        return texto.slice(0, 4000);
+    },
+
+    recall_tasks: async (input, ctx) => {
+        try {
+            const { getTaskHistory } = await import('../memory/memory_manager.js');
+            const userId = ctx?.userId || 'global';
+            const query = String(input).toLowerCase();
+            const hace48h = Date.now() - 48*60*60*1000;
+            const hace7d  = Date.now() - 7*24*60*60*1000;
+            const esTemporal = /ayer|hoy|reciente|hicimos|hice|trabajamos|última|ultimo/i.test(query);
+            
+            let tareas = getTaskHistory(userId, 20);
+            if (esTemporal) {
+                tareas = tareas.filter(t => t.timestamp > hace48h);
+                if (!tareas.length) tareas = getTaskHistory(userId, 10).filter(t => t.timestamp > hace7d);
+            } else {
+                tareas = tareas.filter(t => t.objetivo.toLowerCase().includes(query));
+            }
+            if (!tareas.length) return `No encontré tareas recientes sobre: ${query}`;
+            return tareas.slice(0,8).map(t => 
+                `${t.exito?'✅':'❌'} ${t.objetivo.slice(0,80)}`
+            ).join('\n');
+        } catch(e) {
+            return `Error en recall_tasks: ${e.message}`;
+        }
+    },
+
+    knowledge_manager: async (input, ctx) => {
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+            const VAULT = '/home/ruben/wa-ollama/data/brain_vault.json';
+            const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+            // Cargar vault
+            const loadVault = () => {
+                try { return JSON.parse(fs.default.readFileSync(VAULT, 'utf8')); }
+                catch { return []; }
+            };
+            const saveVault = (data) => {
+                fs.default.mkdirSync(path.dirname(VAULT), { recursive: true });
+                fs.default.writeFileSync(VAULT, JSON.stringify(data, null, 2));
+            };
+
+            const partes = String(input).split('|');
+            const accion = partes[0].trim().toLowerCase();
+            const param  = partes[1]?.trim() || '';
+
+            // INGEST_TEXT: guardar texto directo sin archivo
+            if (accion === 'ingest_text') {
+                if (!param) return '❌ Especifica texto: ingest_text|contenido aquí';
+                const vault = loadVault();
+                const entry = {
+                    id: `text_${Date.now()}`,
+                    source: 'memoria_directa',
+                    content: param,
+                    timestamp: Date.now()
+                };
+                saveVault([...vault, entry]);
+                return `🧠 Información guardada en vault: "${param.slice(0,80)}..."`;
+            }
+
+            // INGEST: procesar archivo y guardar chunks
+            if (accion === 'ingest') {
+                if (!param) return '❌ Especifica ruta: ingest|/ruta/archivo.pdf';
+                if (!fs.default.existsSync(param)) return `❌ Archivo no encontrado: ${param}`;
+                const stat = fs.default.statSync(param);
+                if (stat.size > MAX_SIZE) return `❌ Archivo muy grande (${(stat.size/1024/1024).toFixed(1)}MB). Máximo 10MB.`;
+
+                let texto = '';
+                const ext = path.extname(param).toLowerCase();
+
+                if (ext === '.pdf') {
+                    const pdfParse = (await import('pdf-parse')).default;
+                    const buffer = fs.default.readFileSync(param);
+                    const data = await pdfParse(buffer);
+                    texto = data.text;
+                } else if (['.txt', '.md', '.json'].includes(ext)) {
+                    texto = fs.default.readFileSync(param, 'utf8');
+                } else {
+                    return `❌ Formato no soportado: ${ext}. Usa PDF, TXT o MD.`;
+                }
+
+                // Dividir en chunks de ~500 palabras
+                const palabras = texto.split(/\s+/).filter(Boolean);
+                const CHUNK_SIZE = 500;
+                const chunks = [];
+                for (let i = 0; i < palabras.length; i += CHUNK_SIZE) {
+                    chunks.push(palabras.slice(i, i + CHUNK_SIZE).join(' '));
+                }
+
+                const source = path.basename(param);
+                const vault = loadVault().filter(e => e.source !== source); // Reemplazar si ya existe
+                const nuevos = chunks.map((content, idx) => ({
+                    id: `${source}_chunk_${idx}`,
+                    source,
+                    content,
+                    timestamp: Date.now()
+                }));
+                saveVault([...vault, ...nuevos]);
+                return `🧠 Aprendido: "${source}" → ${chunks.length} fragmentos guardados en memoria. Total en vault: ${vault.length + nuevos.length} fragmentos.`;
+            }
+
+            // QUERY: buscar fragmentos relevantes
+            if (accion === 'query') {
+                if (!param) return '❌ Especifica consulta: query|tu pregunta aquí';
+                const vault = loadVault();
+                if (!vault.length) return '🧠 El vault está vacío. Ingesta primero un documento con ingest|ruta.';
+
+                // Búsqueda por palabras clave (sin sobrecargar CPU)
+                const queryWords = param.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+                const scored = vault.map(chunk => {
+                    const text = chunk.content.toLowerCase();
+                    const score = queryWords.reduce((acc, w) => {
+                        const matches = (text.match(new RegExp(w, 'g')) || []).length;
+                        return acc + matches;
+                    }, 0);
+                    return { ...chunk, score };
+                }).filter(c => c.score > 0)
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 3);
+
+                if (!scored.length) return `🧠 No encontré información sobre: "${param}"`;
+                return scored.map((c, i) =>
+                    `[${i+1}] (${c.source}):\n${c.content.slice(0, 400)}...`
+                ).join('\n\n');
+            }
+
+            // LIST: listar documentos en vault
+            if (accion === 'list') {
+                const vault = loadVault();
+                if (!vault.length) return '🧠 Vault vacío.';
+                const fuentes = [...new Set(vault.map(c => c.source))];
+                return `🧠 Documentos en memoria (${vault.length} fragmentos total):\n${fuentes.map((f,i) => `${i+1}. ${f}`).join('\n')}`;
+            }
+
+            // DELETE: eliminar documento del vault
+            if (accion === 'delete') {
+                const vault = loadVault();
+                const nuevo = vault.filter(c => !c.source.includes(param));
+                saveVault(nuevo);
+                return `🗑️ Eliminados fragmentos de "${param}". Vault: ${nuevo.length} fragmentos restantes.`;
+            }
+
+            return `Acciones disponibles: ingest|ruta, query|pregunta, list, delete|nombre`;
+        } catch(e) {
+            return `Error en knowledge_manager: ${e.message}`;
+        }
+    },
+
+    crear_presentacion: async (input) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const execAsync = promisify(exec);
+            let datos;
+            try { datos = JSON.parse(input); }
+            catch {
+                datos = {
+                    tipo: 'impress',
+                    titulo: input.slice(0, 50),
+                    diapositivas: [{ titulo: input.slice(0, 50), contenido: [input] }]
+                };
+            }
+            datos.tipo = 'impress';
+            const arg = JSON.stringify(datos).replace(/'/g, '"');
+            const { stdout } = await execAsync(`python3 /home/ruben/wa-ollama/evoluciones/libreoffice_bmo.py '${arg}'`, { timeout: 120000 });
+            const result = JSON.parse(stdout);
+            return result.ok ? result.ruta : `Error: ${result.error}`;
+        } catch(e) { return `Error en crear_presentacion: ${e.message}`; }
+    },
+
+    crear_documento_writer: async (input) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const execAsync = promisify(exec);
+            let datos;
+            try { datos = JSON.parse(input); }
+            catch {
+                datos = {
+                    tipo: 'writer',
+                    titulo: 'Documento',
+                    contenido: input
+                };
+            }
+            datos.tipo = 'writer';
+            const arg = JSON.stringify(datos).replace(/'/g, '"');
+            const { stdout } = await execAsync(`python3 /home/ruben/wa-ollama/evoluciones/libreoffice_bmo.py '${arg}'`, { timeout: 120000 });
+            const result = JSON.parse(stdout);
+            return result.ok ? result.ruta : `Error: ${result.error}`;
+        } catch(e) { return `Error en crear_documento_writer: ${e.message}`; }
+    },
+
+    crear_excel: async (input) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const fs = await import('fs');
+            const execAsync = promisify(exec);
+
+            // Detectar si es edición de archivo existente
+            const esEdicion = /\b(agrega|añade|quita|elimina|modifica|actualiza|edita|ponle|cambia)\b/i.test(String(input));
+            const editarMatch = String(input).match(/\|EDITAR:(\/tmp\/[\w._-]+\.xlsx)/);
+
+            // Si es edición pero NO hay doc activo — mostrar lista de excels disponibles
+            if (esEdicion && !editarMatch) {
+                const { execSync: es2 } = await import('child_process');
+                const archivos = es2("find /tmp -name 'hoja_bmo_*.xlsx' -mtime -1 2>/dev/null | sort -r | head -5", {encoding:'utf8'}).trim().split('\n').filter(Boolean);
+                if (archivos.length === 0) {
+                    return 'NO_EXCEL_ACTIVO';
+                }
+                const lista = archivos.map((f,i) => {
+                    const ts = f.match(/_(\d+)\.xlsx/)?.[1];
+                    const fecha = ts ? new Date(parseInt(ts)).toLocaleTimeString() : 'desconocido';
+                    return `${i+1}. ${f.split('/').pop()} (${fecha})`;
+                }).join('\n');
+                return `SELECCIONAR_EXCEL:${archivos.join('|')}:${lista}`;
+            }
+            if (editarMatch) {
+                const rutaExistente = editarMatch[1];
+                const instruccion = input.replace(/\|EDITAR:.*/, '').trim();
+                // Leer el archivo existente y agregar datos
+                const fs2 = await import('fs');
+                if (fs2.default.existsSync(rutaExistente)) {
+                    // Extraer nuevos datos del instrucción
+                    const nuevasFila = instruccion.match(/([A-Za-záéíóúñ]+)\s+([\d,\.]+)/g) || [];
+                    if (nuevasFila.length) {
+                        // Usar openpyxl para editar el archivo existente
+                        const { promisify: p2 } = await import('util');
+                        const { exec: ex2 } = await import('child_process');
+                        const ea2 = p2(ex2);
+                        const filasNuevas = nuevasFila.map(f => {
+                            const [mes, val] = f.trim().split(/\s+/);
+                            return [mes, parseFloat(val.replace(',',''))];
+                        });
+                        const editScript = `
+import openpyxl, json, sys
+wb = openpyxl.load_workbook('${rutaExistente}')
+ws = wb.active
+nuevas = ${JSON.stringify(filasNuevas)}
+for fila in nuevas:
+    ws.append(fila)
+wb.save('${rutaExistente}')
+print(json.dumps({"ok": True, "ruta": "${rutaExistente}"}))
+`;
+                        const tmpPy = `/tmp/edit_excel_${Date.now()}.py`;
+                        fs2.default.writeFileSync(tmpPy, editScript);
+                        const { stdout: out2 } = await ea2(`python3 ${tmpPy}`, { timeout: 30000 });
+                        fs2.default.unlinkSync(tmpPy);
+                        const res2 = JSON.parse(out2);
+                        return res2.ok ? res2.ruta : `Error editando: ${res2.error}`;
+                    }
+                }
+            }
+            // input puede ser JSON directo o texto natural
+            let datos;
+            try {
+                datos = JSON.parse(input);
+            } catch {
+                // Construir JSON desde texto natural
+                // Ejemplo: "Enero 150000, Febrero 180000, Marzo 120000"
+                const pares = input.match(/([A-Za-záéíóúñÁÉÍÓÚÑ]+)\s+([\d,\.]+)/g) || [];
+                const filas = pares.map(p => {
+                    const [mes, valor] = p.trim().split(/\s+/);
+                    return [mes, parseFloat(valor.replace(',',''))];
+                });
+                datos = {
+                    tipo: 'calc',
+                    titulo: 'Reporte',
+                    encabezados: ['Concepto', 'Valor'],
+                    filas
+                };
+            }
+
+            if (!datos.tipo) datos.tipo = 'calc';
+
+            const tmpJson = `/tmp/excel_req_${Date.now()}.json`;
+            fs.default.writeFileSync(tmpJson, JSON.stringify(datos));
+
+            const { stdout, stderr } = await execAsync(
+                `python3 /home/ruben/wa-ollama/evoluciones/libreoffice_bmo.py '${JSON.stringify(datos).replace(/'/g, '"')}'`,
+                { timeout: 120000 }
+            );
+            fs.default.unlinkSync(tmpJson);
+
+            const result = JSON.parse(stdout);
+            if (result.ok) {
+                return result.ruta;
+            } else {
+                return `Error creando Excel: ${result.error || stderr}`;
+            }
+        } catch(e) {
+            return `Error en crear_excel: ${e.message}`;
+        }
+    },
+
+    manage_dependencies: async (input) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const fs = await import('fs');
+            const path = await import('path');
+            const execAsync = promisify(exec);
+
+            const modo = String(input || '').trim();
+            const [accion, paquete] = modo.includes(':') ? modo.split(':') : ['install', modo];
+            const pkg = (paquete || accion).trim().toLowerCase().replace(/[^a-z0-9@/_.-]/g, '');
+
+            if (!pkg) return '❌ Especifica un paquete. Ej: install:moment o check:canvas';
+
+            // Lista negra de paquetes peligrosos o incompatibles con ARM
+            const PROHIBIDOS = ['electron', 'puppeteer', 'playwright', 'sharp', 'node-gyp',
+                'sodium-native', 'bcrypt', 'canvas', 'gl', 'opencv4nodejs'];
+            if (PROHIBIDOS.some(p => pkg.includes(p))) {
+                return `❌ Paquete "${pkg}" está en lista negra (incompatible con ARM o peligroso).`;
+            }
+
+            const PROJECT_DIR = '/home/ruben/wa-ollama';
+            const modulePath = path.join(PROJECT_DIR, 'node_modules', pkg.split('/').pop());
+
+            // Modo check: verificar si existe
+            if (accion === 'check') {
+                const existe = fs.existsSync(modulePath);
+                return existe
+                    ? `✅ Paquete "${pkg}" ya está instalado.`
+                    : `❌ Paquete "${pkg}" NO está instalado.`;
+            }
+
+            // Modo list: listar dependencias instaladas recientemente
+            if (accion === 'list') {
+                const { stdout } = await execAsync('cat /home/ruben/wa-ollama/package.json');
+                const pkgJson = JSON.parse(stdout);
+                const deps = Object.keys(pkgJson.dependencies || {}).join(', ');
+                return `📦 Dependencias instaladas: ${deps}`;
+            }
+
+            // Modo install: instalar paquete
+            if (fs.existsSync(modulePath)) {
+                return `✅ Paquete "${pkg}" ya está instalado. No se requiere acción.`;
+            }
+
+            console.log(`[TOOL] manage_dependencies | Instalando ${pkg}...`);
+            const { stdout, stderr } = await execAsync(
+                `cd ${PROJECT_DIR} && npm install ${pkg} --save --prefer-offline 2>&1`,
+                { timeout: 60000 }
+            );
+
+            const exitoso = fs.existsSync(modulePath) || stdout.includes('added');
+            if (exitoso) {
+                return `📦 Paquete "${pkg}" instalado correctamente. Ya puede ser usado en futuras tareas.`;
+            } else {
+                return `⚠️ Instalación de "${pkg}" completó con advertencias: ${stderr?.slice(0,200) || stdout?.slice(0,200)}`;
+            }
+        } catch(e) {
+            if (e.killed) return `⏱️ Timeout instalando paquete. Red lenta o paquete muy grande.`;
+            return `Error en manage_dependencies: ${e.message.slice(0,200)}`;
+        }
+    },
+
+    manage_disk_storage: async (input) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const execAsync = promisify(exec);
+            const modo = String(input || 'report').trim().toLowerCase();
+
+            const run = async (cmd, fallback = '') => {
+                try { return (await execAsync(cmd)).stdout.trim(); }
+                catch { return fallback; }
+            };
+
+            if (modo === 'report') {
+                const tmp     = await run("find /tmp -maxdepth 1 -name 'bmo_*' 2>/dev/null | wc -l | xargs -I{} echo '{} archivos bmo en /tmp'", '0 archivos bmo en /tmp');
+                const logs    = await run('du -sh /home/ruben/.pm2/logs 2>/dev/null', 'N/A');
+                const modelos = await run('du -sh /home/ruben/.ollama/models 2>/dev/null || echo "No instalado"', 'No instalado');
+                const waLogs  = await run('du -sh /home/ruben/wa-ollama/logs 2>/dev/null', 'N/A');
+                const disco = await run("df -h / | awk 'NR==2{print $5}'", 'N/A');
+                return `📊 REPORTE DE DISCO:
+Disco /: ${disco}
+/tmp: ${tmp}
+PM2 logs: ${logs}
+Ollama modelos: ${modelos}
+wa-ollama logs: ${waLogs}`;
+            }
+
+            if (modo === 'clean_logs') {
+                const antes = await run("df / | awk 'NR==2{print $3}'", '0');
+                await run('pm2 flush');
+                await run('find /home/ruben/.pm2/logs -name "*.log" -size +10M -exec truncate -s 0 {} \;');
+                await run('find /home/ruben/wa-ollama -name "*.log" -exec truncate -s 0 {} \;');
+                const despues = await run("df / | awk 'NR==2{print $3}'", '0');
+                const liberado = Math.max(0, parseInt(antes) - parseInt(despues));
+                const disco = await run("df -h / | awk 'NR==2{print $5}'", 'N/A');
+                return `🧹 Logs limpiados. Liberado: ~${(liberado/1024).toFixed(1)}MB. Disco actual: ${disco}`;
+            }
+
+            if (modo === 'clean_tmp') {
+                const antes = await run("df / | awk 'NR==2{print $3}'", '0');
+                await run('find /tmp -name "bmo_doc_*" -mmin +1440 -delete 2>/dev/null');
+                await run('find /tmp -name "goal_gen_*" -mmin +1440 -delete 2>/dev/null');
+                await run('find /tmp -name "ollama_req_*" -mmin +60 -delete 2>/dev/null');
+                await run('find /tmp -name "bmo_app_*" -mmin +60 -delete 2>/dev/null');
+                const despues = await run("df / | awk 'NR==2{print $3}'", '0');
+                const liberado = Math.max(0, parseInt(antes) - parseInt(despues));
+                const disco = await run("df -h / | awk 'NR==2{print $5}'", 'N/A');
+                return `🧹 /tmp limpiado. Liberado: ~${(liberado/1024).toFixed(1)}MB. Disco actual: ${disco}`;
+            }
+
+            if (modo === 'clean_all') {
+                const r1 = await TOOLS.manage_disk_storage('clean_logs');
+                const r2 = await TOOLS.manage_disk_storage('clean_tmp');
+                const disco = await run("df -h / | awk 'NR==2{print $5}'", 'N/A');
+                return `🧹 Higiene Digital Completada:
+${r1}
+${r2}
+Espacio actual en /: ${disco}`;
+            }
+
+            return `Modo desconocido: ${modo}. Usa: report, clean_logs, clean_tmp, clean_all`;
+        } catch(e) {
+            return `Error en manage_disk_storage: ${e.message}`;
+        }
+    },
+
+    ejecutar_codigo: async (input, ctx) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const fs2 = await import('fs');
+            const execAsync = promisify(exec);
+
+            // Extraer código de bloque markdown si viene así
+            let codigo = input.trim();
+            const bloqueMatch = codigo.match(/```(?:python|py|js|javascript|node)?\s*([\s\S]*?)```/);
+            if (bloqueMatch) codigo = bloqueMatch[1].trim();
+
+            // Limpiar prefijo de lenguaje
+            codigo = codigo.replace(/^(python|py|javascript|node|js)\s*\n/i, '');
+
+            // Detectar lenguaje por contenido
+            const tienePython = /^(print|def |import |from |class |if __name__|#!.*python)/m.test(codigo) ||
+                                 /\bprint\s*\(/i.test(codigo) ||
+                                 /^(python|py)\s/i.test(input);
+            const tieneNode = /^(node|js|javascript)\s/i.test(input) ||
+                               /\b(require|console\.log|const |let |var |async |await )/.test(codigo) && !tienePython;
+
+            const esPython = tienePython || (!tieneNode && !codigo.includes('{'));
+            const ext = esPython ? 'py' : 'mjs';
+            const tmpFile = `/tmp/bmo_code_${Date.now()}.${ext}`;
+            fs2.default.writeFileSync(tmpFile, codigo);
+
+            const cmd = esPython ? `python3 ${tmpFile}` : `node ${tmpFile}`;
+
+            const { stdout, stderr } = await execAsync(cmd, { timeout: 30000, cwd: '/home/ruben/wa-ollama' });
+            fs2.default.unlinkSync(tmpFile);
+
+            const resultado = (stdout || '') + (stderr ? `
+STDERR: ${stderr}` : '');
+            return resultado.slice(0, 2000) || 'Ejecutado sin output';
+        } catch(e) {
+            return `Error ejecutando codigo: ${e.message.slice(0, 500)}`;
+        }
+    },
+
+    leer_archivo_proyecto: async (input, ctx) => {
+        try {
+            const fs2 = await import('fs');
+            const path2 = await import('path');
+            const base = '/home/ruben/wa-ollama';
+            const ruta = input.trim().startsWith('/') ? input.trim() : path2.join(base, input.trim());
+
+            // Seguridad: solo leer dentro del proyecto
+            if (!ruta.startsWith(base) && !ruta.startsWith('/tmp/')) {
+                return 'Solo puedo leer archivos del proyecto wa-ollama o /tmp/';
+            }
+            if (!fs2.default.existsSync(ruta)) return `Archivo no encontrado: ${ruta}`;
+            const stat = fs2.default.statSync(ruta);
+            if (stat.size > 100000) return `Archivo muy grande (${(stat.size/1024).toFixed(0)}KB). Especifica líneas.`;
+            return fs2.default.readFileSync(ruta, 'utf8').slice(0, 3000);
+        } catch(e) {
+            return `Error leyendo archivo: ${e.message}`;
+        }
+    },
+
+    commit_github: async (input, ctx) => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const execAsync = promisify(exec);
+
+            // input: "mensaje del commit | ruta/del/repo"
+            const partes = input.split('|');
+            const mensaje = partes[0].trim() || 'BMO auto-commit';
+            const repo = partes[1]?.trim() || '/home/ruben/dashboard';
+
+            // Verificar que es un repo git
+            const { stdout: status } = await execAsync(`git -C ${repo} status --short`);
+            if (!status.trim()) return 'No hay cambios para commitear en ' + repo;
+
+            await execAsync(`git -C ${repo} add -A`);
+            const { stdout: commit } = await execAsync(`git -C ${repo} commit -m "${mensaje.replace(/"/g, "'")}"`);
+            const { stdout: push } = await execAsync(`git -C ${repo} push`).catch(e => ({stdout: 'Push falló: ' + e.message.slice(0,100)}));
+
+            return `Commit exitoso: ${mensaje}
+${commit.slice(0,200)}
+${push}`;
+        } catch(e) {
+            return `Error en commit: ${e.message.slice(0,300)}`;
+        }
+    },
+
+    gestionar_documentos: async (input, ctx) => {
+        try {
+            const { listarDocumentos, buscarDocumento, eliminarDocumento } = await import('../core/document_manager.js');
+            const userId = ctx?.userId || 'global';
+            const cmd = String(input).trim().toLowerCase();
+
+            // LISTAR
+            if (/listar|lista|cuáles|cuales|tengo|mis documentos/i.test(cmd) || cmd === 'list') {
+                const docs = listarDocumentos(userId);
+                if (!docs.length) return 'No tienes documentos guardados.';
+                return 'Tus documentos:\n' + docs.map((d,i) => `${i+1}. ${d.titulo||d.id} (${d.tipo}) - ${new Date(d.creado).toLocaleDateString()}`).join('\n');
+            }
+
+            // ENVIAR/DESCARGAR
+            if (/envia|manda|descarga|compartir/i.test(cmd)) {
+                const titulo = cmd.replace(/^(envia|manda|descarga|compartir)\s*/i,'').trim();
+                const doc = buscarDocumento(userId, titulo);
+                if (!doc) return `No encontré ningún documento con ese nombre.`;
+                if (ctx?.clienteWA) {
+                    const wwjs = await import('whatsapp-web.js');
+                    const MM = wwjs.MessageMedia || wwjs.default?.MessageMedia;
+                    const fs2 = await import('fs');
+                    const fileData = fs2.default.readFileSync(doc.ruta);
+                    const mimes = {
+                        docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                    };
+                    const ext = doc.ruta.split('.').pop();
+                    const media = new MM(mimes[ext]||'application/octet-stream', fileData.toString('base64'), doc.ruta.split('/').pop());
+                    await ctx.clienteWA.sendMessage(userId, media, {caption: `📄 ${doc.titulo}`});
+                    return `ok`;
+                }
+            }
+
+            // ELIMINAR
+            if (/elimina|borra|delete/i.test(cmd)) {
+                const titulo = cmd.replace(/^(elimina|borra|delete)\s*/i,'').trim();
+                const doc = eliminarDocumento(userId, titulo);
+                if (!doc) return `No encontré "${titulo}" para eliminar.`;
+                return `Eliminado: ${doc.titulo}`;
+            }
+
+            // BUSCAR
+            const doc = buscarDocumento(userId, input);
+            if (doc) return `Encontrado: ${doc.titulo} (${doc.tipo})
+Ruta: ${doc.ruta}
+Creado: ${new Date(doc.creado).toLocaleString()}`;
+            return `No encontré ningún documento con: "${input}"`;
+        } catch(e) {
+            return `Error en gestionar_documentos: ${e.message}`;
+        }
+    },
+
+    estado_actual: async (input, ctx) => {
+        try {
+            const { getEstadoSesion } = await import('../core/session_state.js');
+            const userId = ctx?.userId || 'global';
+            const estado = getEstadoSesion(userId);
+            if (!estado) return 'No hay ninguna tarea activa en este momento. Estoy listo para ayudarte.';
+            const { objetivo, pasos, pasoActual, totalPasos, porcentaje, estado: st, iniciado, descripcionActual } = estado;
+            const tiempoTranscurrido = iniciado ? Math.round((Date.now()-iniciado)/1000) : 0;
+            const tiempoEstimado = iniciado && pasoActual > 0
+                ? Math.round((tiempoTranscurrido/pasoActual) * (totalPasos - pasoActual))
+                : null;
+            if (st === 'completado') {
+                // Si ya terminó, dar contexto de lo último hecho
+                const hace = Math.round((Date.now() - (estado.finalizado||Date.now()))/1000);
+                return `Acabo de terminar: "${objetivo}" (hace ${hace}s). ¿En qué más te ayudo?`;
+            }
+            // Si el objetivo es igual a la pregunta actual, no hay tarea real activa
+            const preguntaActual = String(input).replace(/\[Contexto:.*?\]/,'').trim().toLowerCase();
+            if (objetivo.toLowerCase().includes(preguntaActual.slice(0,20))) {
+                return 'Ahora mismo estoy libre. ¿En qué te puedo ayudar?';
+            }
+            let r = `Estoy trabajando en: "${objetivo}" 🔄
+`;
+            r += `Voy en el paso ${pasoActual} de ${totalPasos} (${porcentaje}%): ${descripcionActual}
+`;
+            if (pasos?.length && pasoActual < pasos.length) {
+                r += `Lo que sigue: ${pasos.slice(pasoActual).join(' → ')}`;
+            }
+            if (tiempoEstimado !== null && tiempoEstimado > 0) r += `
+Calculo unos ${tiempoEstimado}s más.`;
+            return r;
+        } catch(e) {
+            return `Error obteniendo estado: ${e.message}`;
+        }
+    },
+
+    check_system_health: async () => {
+        try {
+            const { promisify } = await import('util');
+            const { exec } = await import('child_process');
+            const execAsync = promisify(exec);
+
+            const run = async (cmd, fallback = 'N/A') => {
+                try { return (await execAsync(cmd)).stdout.trim(); }
+                catch { return fallback; }
+            };
+
+            // Temperatura
+            const tempRaw = await run('vcgencmd measure_temp', 'temp=N/A');
+            const temp = tempRaw.replace('temp=', '');
+
+            // CPU usage (promedio 1s)
+            const cpuRaw = await run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'", '0');
+            const cpu = parseFloat(cpuRaw).toFixed(1) + '%';
+
+            // RAM
+            const ramRaw = await run("free -m | awk '/Mem:/{print $2,$3,$4}'", '0 0 0');
+            const [ramTotal, ramUsed, ramFree] = ramRaw.split(' ').map(Number);
+            const ramPct = ((ramUsed / ramTotal) * 100).toFixed(1);
+            const ram = `${ramUsed}MB/${ramTotal}MB (${ramPct}% usado, ${ramFree}MB libre)`;
+
+            // Storage
+            const diskRaw = await run("df -h / | awk 'NR==2{print $2,$3,$4,$5}'", 'N/A');
+            const [dTotal, dUsed, dFree, dPct] = diskRaw.split(' ');
+            const disk = `${dUsed}/${dTotal} usado (${dPct}), ${dFree} libre`;
+
+            // Uptime
+            const uptime = await run("uptime -p", 'N/A');
+
+            // PM2 reinicios del proceso bmo
+            const pm2Raw = await run("pm2 jlist 2>/dev/null", '[]');
+            let reinicios = 'N/A';
+            try {
+                const procs = JSON.parse(pm2Raw);
+                const bmo = procs.find(p => p.name === 'bmo');
+                reinicios = bmo ? String(bmo.pm2_env.restart_time) : 'N/A';
+            } catch {}
+
+            // Alertas automáticas
+            const alertas = [];
+            const tempNum = parseFloat(temp);
+            if (tempNum > 70) alertas.push('⚠️ Temperatura crítica');
+            else if (tempNum > 60) alertas.push('🌡️ Temperatura elevada');
+            if (parseFloat(ramPct) > 85) alertas.push('⚠️ RAM alta');
+            if (parseInt(reinicios) > 10) alertas.push('⚠️ Muchos reinicios PM2');
+
+            const estado = alertas.length ? alertas.join(' | ') : '✅ Sistema estable';
+
+            return `🖥️ SALUD DEL SISTEMA (${new Date().toLocaleTimeString()})
+Temperatura: ${temp}
+CPU: ${cpu}
+RAM: ${ram}
+Disco (/): ${disk}
+Uptime: ${uptime}
+PM2 reinicios (bmo): ${reinicios}
+Estado: ${estado}`;
+        } catch(e) {
+            return `Error en check_system_health: ${e.message}`;
+        }
+    },
+
+    recall_episodic: async (input, ctx) => {
+        try {
+            const { EpisodicMemory } = await import('../memory/episodic_memory.js');
+            const mem = new EpisodicMemory();
+            const userId = ctx?.userId || 'global';
+            const episodes = await mem.recallSimilar(userId, String(input), 5);
+            if (!episodes.length) return 'No recuerdo conversaciones similares a: ' + String(input).slice(0,60);
+            const lines2 = episodes.map(e => '[' + new Date(e.timestamp).toLocaleDateString('es') + '] ' + e.summary); return 'Episodios:\n' + lines2.join('\n');
+
+
+
+
+        } catch(e) { return 'Error en recall_episodic: ' + e.message; }
+    },
+
+    analizar_causa: async (input, ctx) => {
+        try {
+            const { causalAgent } = await import('../agents/causal_agent.js');
+            const [evento, ...rest] = String(input).split('|');
+            const result = await causalAgent.analyze(evento, { contexto: rest.join('|') });
+            return `🔍 Análisis causal:
+• Causa: ${result.causa}
+• Efecto: ${result.efecto}
+• Predicción: ${result.prediccion}
+• Confianza: ${result.confianza}%`;
+        } catch(e) { return 'Error en analizar_causa: ' + e.message; }
+    },
+
+    rl_stats: async (input, ctx) => {
+        try {
+            const { ReinforcementLearning } = await import('../memory/reinforcement_learning.js');
+            const stats = new ReinforcementLearning().getStats(10);
+            if (!stats.length) return 'Sin datos de aprendizaje aún.';
+            return 'Top acciones por recompensa:\n' + stats.map(s => '- ' + s.action + ': OK=' + s.wins + ' FAIL=' + s.losses + ' reward=' + s.reward).join('\n');
+
+
+
+
+        } catch(e) { return 'Error: ' + e.message; }
+    },
+
+    memory_search: async (input, ctx) => {
+        try {
+            const { getLongTerm, getTaskHistory } = await import('../memory/memory_manager.js');
+            const userId = ctx?.userId || 'global';
+            const query = String(input).slice(0, 100).toLowerCase();
+
+            const tareas = getTaskHistory(userId, 10);
+            const hechos = getLongTerm(userId, 8);
+
+            // Filtrar por relevancia si hay query específico (no temporal)
+            const esTemporal = /ayer|hoy|reciente|última|ultimo|hicimos|hice|trabajamos|pasó/i.test(query);
+            
+            let resumenTareas = tareas
+                .filter(t => esTemporal || t.objetivo.toLowerCase().includes(query))
+                .map(t => `[TAREA] ${t.objetivo} | ${t.exito ? 'exitosa' : 'fallida'}`);
+            
+            let resumenHechos = hechos
+                .filter(h => esTemporal || h.contenido.toLowerCase().includes(query))
+                .map(h => `[${h.tipo}] ${h.contenido.slice(0, 150)}`);
+
+            const todo = [...resumenTareas, ...resumenHechos];
+            if (!todo.length) return `No tengo registros previos sobre: ${query}`;
+            return todo.slice(0, 8).join('\n');
+        } catch(e) {
+            return `Error en memory_search: ${e.message}`;
+        }
+    },
+};
+
+export async function ejecutarTool(nombre, input, ctx = {}) {
+    const tool = TOOLS[nombre];
+    if (!tool) return `Herramienta desconocida: ${nombre}`;
+    try {
+        console.log(`[TOOL] ${nombre} | ${String(input).slice(0, 80)}`);
+
+        const t0 = Date.now();
+        const resultado = await tool(input, ctx);
+        registrarToolUsage(nombre, ctx.userId || 'global', true, Date.now() - t0);
+        return resultado;
+    } catch(e) {
+        console.error(`[TOOL] Error en ${nombre}:`, e.message);
+        registrarToolUsage(nombre, ctx.userId || 'global', false, 0);
+        logError('tool_error', e.message, { contexto: { tool: nombre, input: String(input).slice(0, 100) } });
+        return `Error en ${nombre}: ${e.message}`;
+    }
+}
+
+export function listarTools() { return Object.keys(TOOLS); }

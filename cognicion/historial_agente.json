@@ -1,0 +1,657 @@
+[
+  {
+    "objetivo": "hazme un reporte del clima de Madrid",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid",
+        "resultado": "Sin resultados"
+      }
+    ],
+    "timestamp": "2026-03-11T02:25:35.836Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de Madrid",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid",
+        "resultado": "Sin resultados"
+      }
+    ],
+    "timestamp": "2026-03-11T02:29:55.298Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de Madrid",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid",
+        "resultado": "Error buscando: fetch failed"
+      }
+    ],
+    "timestamp": "2026-03-11T02:36:32.718Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de Madrid",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima Madrid",
+        "resultado": "🌡️ Clima en Madrid, España:\nTemperatura: 7.2°C\nViento: 0.8 km/h\nHumedad: 84%"
+      }
+    ],
+    "timestamp": "2026-03-11T02:57:13.637Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima México"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 19.5°C\nViento: 15.2 km/h\nHumedad: 19%"
+      }
+    ],
+    "timestamp": "2026-03-11T02:57:56.682Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "tema a buscar"
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "tema a buscar",
+        "resultado": "No encontré información sobre: tema a buscar"
+      }
+    ],
+    "timestamp": "2026-03-11T03:03:13.868Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 19.2°C\nViento: 14.8 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:09:31.551Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México con tabla",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México con tabla"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México con tabla\n\nDatos reales obtenidos:\n\n[buscar]: No encontré la ciudad: méxico con tabla"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México con tabla",
+        "resultado": "No encontré la ciudad: méxico con tabla"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México con tabla\n\nDatos reales obtenidos:\n\n[buscar]: No encontré la ciudad: méxico con tabla",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:16:42.816Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México con tabla",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:21:33.704Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México con tabla",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:24:56.472Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México con tabla",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.7°C\nViento: 14.1 km/h\nHumedad: 19%",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:29:06.184Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de México con tabla",
+    "plan": [
+      {
+        "accion": "buscar",
+        "input": "clima de México"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.2°C\nViento: 13.4 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "resultados": [
+      {
+        "accion": "buscar",
+        "input": "clima de México",
+        "resultado": "🌡️ Clima en México, México:\nTemperatura: 18.2°C\nViento: 13.4 km/h\nHumedad: 19%"
+      },
+      {
+        "accion": "crear_documento",
+        "input": "crea un reporte Word con tabla y los datos del clima o información encontrada sobre: clima de México\n\nDatos reales obtenidos:\n\n[buscar]: 🌡️ Clima en México, México:\nTemperatura: 18.2°C\nViento: 13.4 km/h\nHumedad: 19%",
+        "resultado": "Documento creado y enviado"
+      },
+      {
+        "accion": "responder_usuario",
+        "input": "📄 Aquí está tu reporte con la información encontrada.",
+        "resultado": "📄 Aquí está tu reporte con la información encontrada."
+      }
+    ],
+    "timestamp": "2026-03-11T03:33:57.071Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de Monterrey",
+    "pasos": 3,
+    "exito": true,
+    "duracion_s": 93.4,
+    "timestamp": "2026-03-11T04:33:58.718Z"
+  },
+  {
+    "objetivo": "hazme un reporte del clima de Monterrey",
+    "pasos": 3,
+    "exito": true,
+    "duracion_s": 87.2,
+    "timestamp": "2026-03-11T04:37:25.196Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 0.7,
+    "timestamp": "2026-03-11T05:23:06.196Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 0.6,
+    "timestamp": "2026-03-11T05:24:40.919Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 0.8,
+    "timestamp": "2026-03-11T05:27:04.631Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 1,
+    "timestamp": "2026-03-11T05:36:42.279Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 4.4,
+    "timestamp": "2026-03-11T05:36:48.511Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 30.2,
+    "timestamp": "2026-03-11T05:41:24.706Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 31.1,
+    "timestamp": "2026-03-11T05:45:00.212Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 30.1,
+    "timestamp": "2026-03-11T05:46:29.275Z"
+  },
+  {
+    "objetivo": "dame la receta para hacer donas y guardalo en un txt y mándamelo",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 31.2,
+    "timestamp": "2026-03-11T05:49:39.507Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas, dame la receta en un archivo .txt",
+    "pasos": 2,
+    "exito": true,
+    "duracion_s": 30.7,
+    "timestamp": "2026-03-11T05:52:18.140Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 2,
+    "exito": true,
+    "duracion_s": 31.9,
+    "timestamp": "2026-03-11T18:32:50.218Z"
+  },
+  {
+    "objetivo": "Quiero que hagas un archivo donde dentro le escribas una receta para hacer donas",
+    "pasos": 1,
+    "exito": true,
+    "duracion_s": 30.2,
+    "timestamp": "2026-03-11T18:37:25.623Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 154.6,
+    "timestamp": "2026-03-11T18:43:41.722Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 103.7,
+    "timestamp": "2026-03-11T18:48:23.819Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 150.9,
+    "timestamp": "2026-03-11T18:56:28.828Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 77.2,
+    "timestamp": "2026-03-11T18:58:40.313Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 162.4,
+    "timestamp": "2026-03-11T19:08:26.991Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 207.7,
+    "timestamp": "2026-03-11T19:15:23.889Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 462.8,
+    "timestamp": "2026-03-11T20:02:20.811Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 312,
+    "timestamp": "2026-03-11T20:14:42.716Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 173.1,
+    "timestamp": "2026-03-11T22:24:06.978Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 562.5,
+    "timestamp": "2026-03-11T22:38:10.674Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 310.7,
+    "timestamp": "2026-03-11T22:58:47.749Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 311,
+    "timestamp": "2026-03-11T23:06:59.961Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 14.1,
+    "timestamp": "2026-03-11T23:13:21.219Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 15.2,
+    "timestamp": "2026-03-11T23:17:16.319Z"
+  },
+  {
+    "objetivo": "generame una receta para hacer donas y guardala en un archivo .txt",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 9.9,
+    "timestamp": "2026-03-11T23:37:30.350Z"
+  },
+  {
+    "objetivo": "crea un reporte de ventas con tabla y gráfica: Enero 150000, Febrero 180000, Marzo 120000, Abril 200000, Mayo 175000, Junio 210000",
+    "pasos": 5,
+    "exito": true,
+    "duracion_s": 11.1,
+    "timestamp": "2026-03-11T23:56:11.539Z"
+  },
+  {
+    "objetivo": "BMO, necesito que investigues el precio histórico del Bitcoin durante los últimos 5 meses. Redacta un breve análisis y genera un documento de Word con una tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 21.2,
+    "timestamp": "2026-03-12T02:19:47.908Z"
+  },
+  {
+    "objetivo": "BMO, necesito que investigues el precio histórico del Bitcoin durante los últimos 5 meses. Redacta un breve análisis y genera un documento de Word con una tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 6.2,
+    "timestamp": "2026-03-12T02:27:27.730Z"
+  },
+  {
+    "objetivo": "BMO, necesito que investigues el precio histórico del Bitcoin durante los últimos 5 meses. Redacta un breve análisis y genera un documento de Word con una tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 5.9,
+    "timestamp": "2026-03-12T02:30:25.160Z"
+  },
+  {
+    "objetivo": "BMO, necesito que investigues el precio histórico del Bitcoin durante los últimos 5 meses. Redacta un breve análisis y genera un documento de Word con una tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 6.3,
+    "timestamp": "2026-03-12T02:33:59.867Z"
+  },
+  {
+    "objetivo": "BMO, necesito que investigues el precio histórico del Bitcoin durante los últimos 5 meses. Redacta un breve análisis y genera un documento de Word con una tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 8.5,
+    "timestamp": "2026-03-12T02:36:21.412Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte rápido de 3 líneas sobre el estado de mi Raspberry Pi y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 7.7,
+    "timestamp": "2026-03-12T02:45:07.628Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte de 3 líneas sobre el estado de mi Raspberry Pi y mándalo en Word.",
+    "pasos": 2,
+    "exito": true,
+    "duracion_s": 14.9,
+    "timestamp": "2026-03-12T03:12:25.712Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte de 3 líneas sobre el estado de mi Raspberry Pi y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 37.9,
+    "timestamp": "2026-03-12T03:15:12.927Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte de 3 líneas sobre el estado de mi Raspberry Pi y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 39.8,
+    "timestamp": "2026-03-12T03:21:51.826Z"
+  },
+  {
+    "objetivo": "BMO, investiga el precio del Bitcoin de los últimos 5 meses y genera un documento Excel con tabla y gráfica comparativa.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 45.8,
+    "timestamp": "2026-03-12T03:27:58.168Z"
+  },
+  {
+    "objetivo": "BMO, investiga el precio del Bitcoin de los últimos 5 meses y genera un documento Excel con tabla.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 44.8,
+    "timestamp": "2026-03-12T03:30:06.893Z"
+  },
+  {
+    "objetivo": "BMO, investiga el precio del Bitcoin de los últimos 5 meses y genera un documento word con tabla.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 44.3,
+    "timestamp": "2026-03-12T03:31:28.384Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte del precio del bitcoin  de los últimos 5 meses y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 40.4,
+    "timestamp": "2026-03-12T03:33:36.697Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte de 3 líneas sobre el estado de mi Raspberry Pi y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 38,
+    "timestamp": "2026-03-12T03:35:41.370Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte del precio del bitcoin de los últimos 5 meses y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 46.1,
+    "timestamp": "2026-03-12T03:41:20.701Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte del precio del bitcoin de los últimos 2 meses y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 50.7,
+    "timestamp": "2026-03-12T03:46:52.952Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte del precio del bitcoin de los últimos 2 meses y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 49.8,
+    "timestamp": "2026-03-12T03:51:07.324Z"
+  },
+  {
+    "objetivo": "BMO, genera un reporte del precio del bitcoin de los últimos 2 dias y mándalo en Word.",
+    "pasos": 4,
+    "exito": true,
+    "duracion_s": 39.6,
+    "timestamp": "2026-03-12T03:56:13.706Z"
+  },
+  {
+    "objetivo": "Quiero que me digas que es lo que más hace el usuario Daniel",
+    "pasos": 3,
+    "exito": true,
+    "duracion_s": 40,
+    "timestamp": "2026-03-12T04:18:29.473Z"
+  }
+]

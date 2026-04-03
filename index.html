@@ -1,0 +1,132 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk Cyan</title>
+    <style>
+        :root {
+            --cyan: #00ffff;
+            --dark-cyan: #00a3a3;
+            --dark: #0a0a0a;
+            --light: #1a1a1a;
+            --accent: #ff00ff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: var(--dark);
+            color: var(--cyan);
+            overflow-x: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--dark-cyan), var(--cyan));
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 0 20px var(--cyan);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 3rem;
+            text-shadow: 0 0 10px var(--cyan);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background-color: var(--light);
+            border: 1px solid var(--dark-cyan);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 255, 255, 0.2);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 255, 255, 0.3);
+            border-color: var(--cyan);
+        }
+
+        .card h2 {
+            color: var(--cyan);
+            margin-top: 0;
+        }
+
+        .card p {
+            color: #ccc;
+        }
+
+        footer {
+            background-color: var(--dark);
+            color: var(--cyan);
+            text-align: center;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            border-top: 1px solid var(--dark-cyan);
+        }
+
+        .glitch {
+            position: relative;
+            animation: glitch 2s infinite;
+        }
+
+        @keyframes glitch {
+            0% { text-shadow: 0 0 0 var(--accent); }
+            20% { text-shadow: 2px 0 0 var(--accent), -2px 0 0 var(--accent); }
+            40% { text-shadow: -2px 0 0 var(--accent), 2px 0 0 var(--accent); }
+            60% { text-shadow: 0 0 0 var(--accent); }
+            80% { text-shadow: 2px 0 0 var(--accent), -2px 0 0 var(--accent); }
+            100% { text-shadow: -2px 0 0 var(--accent), 2px 0 0 var(--accent); }
+        }
+
+        .neon {
+            text-shadow: 0 0 5px var(--cyan), 0 0 10px var(--cyan);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 class="glitch neon">CYBERPUNK CIAN</h1>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>Bienvenido al futuro</h2>
+            <p>En este mundo digital, la tecnología y la humanidad se fusionan en una danza de luces neón y datos que fluyen como ríos de información.</p>
+        </div>
+
+        <div class="card">
+            <h2>Explora el sistema</h2>
+            <p>Navega por nuestras redes neuronales y descubre los secretos ocultos en los rincones más oscuros de la matriz.</p>
+        </div>
+
+        <div class="card">
+            <h2>Conecta con la red</h2>
+            <p>Únete a nuestra comunidad de hackers, programadores y soñadores que buscan redefinir los límites de lo posible.</p>
+        </div>
+
+        <div class="card">
+            <h2>Descarga el futuro</h2>
+            <p>Accede a nuestros archivos cifrados y descubre herramientas que te permitirán dominar el mundo digital.</p>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2023 Cyberpunk Cyan. Todos los derechos reservados.</p>
+    </footer>
+</body>
+</html>
+```

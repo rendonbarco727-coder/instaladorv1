@@ -1,0 +1,101 @@
+{
+  "comandos_exitosos": {
+    "Bueno entonces dame un diagnóstico detallado de la raspberry": [
+      "df -h /home/ruben/wa-ollama && free -m && uptime"
+    ],
+    "Dime en qué se están ocupando esas 36GB": [
+      "du -hsx / | sort -rh | head -20"
+    ],
+    "Crea una carpeta que diga Documentos_personales": [
+      "mkdir /home/ruben/Documentos_personales"
+    ],
+    "Dame la lista de todas las carpetas": [
+      "ls -l /home/ruben/"
+    ],
+    "Enlista lo que tenga": [
+      "ls -l /home/ruben/Documentos_personales"
+    ],
+    "Abre /Home/Ruben": [
+      "ls -l /home/ruben"
+    ],
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAA": [
+      "ls -lt /home/ruben/wa-ollama/backups/ | head -10"
+    ],
+    "Puedes ver los dispositivos blotooth que están visibles?": [
+      "bluetoothctl scan on"
+    ],
+    "ver los dispositivos Bluetooth que están visibles y dame la ": [
+      "bluetoothctl scan on"
+    ],
+    "Cuántos dispositivos están conectados en la red wifi?": [
+      "arp -an | grep -v ^127.0.0.1 | wc -l"
+    ],
+    "bmo ejecuta: arp -a": [
+      "arp -a"
+    ],
+    "Que dispositivos Bluetooth están cerca?": [
+      "bluetoothctl scan on",
+      "bluetoothctl devices"
+    ],
+    "Dame un informe sobre el estado sobre tu memoria": [
+      "free -m"
+    ],
+    "Cómo está tu cpu?": [
+      "vcgencmd measure_temp"
+    ],
+    "Toma una captura de pantalla": [
+      "DISPLAY=:99 scrot /home/ruben/wa-ollama/temp_files/captura.png"
+    ],
+    "agente terminal: DISPLAY=:99 scrot /tmp/test100.png && echo ": [
+      "DISPLAY=:99 DISPLAY=:99 scrot /tmp/test100.png && echo /tmp/test100.png"
+    ],
+    "toma una captura de pantalla": [
+      "DISPLAY=:99 DISPLAY=:99 scrot /tmp/captura_$(date +%s).png && echo /tmp/captura_$(date +%s).png"
+    ],
+    "Si azlo lo autorizó": [
+      "DISPLAY=:99 top -b -n 1 | head -n 20 > /home/ruben/wa-ollama/temp_files/top_output.txt && free -m > /home/ruben/wa-ollama/temp_files/free_output.txt && df -h > /home/ruben/wa-ollama/temp_files/df_output.txt"
+    ],
+    "Pero ahora entregamelo en un archivo de texto": [
+      "DISPLAY=:99 echo -e \"Receta: Donas Clásicas Caseras\\n\\nIngredientes:\\n2 tazas de harina de trigo\\n1/2 taza de azúcar\\n1 cucharadita de sal\\n2 1/4 cucharaditas de levadura seca activa (un sobre)\\n1/2 taza de leche tibia\\n2 huevos\\n1/4 taza de mantequilla derretida\\nAceite vegetal para freír\\nGlaseado (azúcar glas, leche, vainilla)\\n\\nInstrucciones:\\nEn un tazón grande, mezcla la harina, el azúcar, la sal y la levadura.\\nEn otro tazón, bate la leche tibia, los huevos y la mantequilla derretida.\\nAgrega los ingredientes húmedos a los secos y mezcla hasta formar una masa suave.\\nAmasa la masa sobre una superficie enharinada durante 5-7 minutos.\\nColoca la masa en un tazón engrasado, cúbrela y déjala reposar en un lugar cálido durante 1 hora o hasta que duplique su tamaño.\\nEstira la masa sobre una superficie enharinada y corta círculos con un cortador de donas.\\nCalienta el aceite vegetal en una olla grande a 175°C.\\nFríe las donas durante 1-2 minutos por cada lado, hasta que estén doradas.\\nEscurre las donas sobre papel absorbente.\\nGlasea las donas con tu glaseado favorito.\" > /home/ruben/wa-ollama/temp_files/receta_donas.txt"
+    ],
+    "BMO, estado del sistema": [
+      "DISPLAY=:99 uptime; free -m; df -h"
+    ],
+    "Tareas programadas": [
+      "DISPLAY=:99 crontab -l"
+    ]
+  },
+  "comandos_fallidos": {
+    "Envíame el PDF que tienes en Documentos_personales": [
+      "cp '/home/ruben/Documentos_personales/comprobanteVigenciaDerechos57190476812_3.pdf /home/ruben/wa-ollama/temp_files/' → Command failed: cp '/home/ruben/Documentos_personales/comprobanteVigenciaDerecho",
+      "cp '/home/ruben/Documentos_personales/comprobanteVigenciaDerechos57190476812_3.pdf' /home/ruben/wa-ollama/temp_files/ → Command failed: cp '/home/ruben/Documentos_personales/comprobanteVigenciaDerecho"
+    ],
+    "Puedes conectarte a alguno?": [
+      "bluetoothctl connect 10:05:AA:60:33:25 → Command failed: bluetoothctl connect 10:05:AA:60:33:25\n"
+    ],
+    "Hola": [
+      "arp -a → Command failed: arp -a\n/bin/sh: 1: arp: not found\n"
+    ],
+    "Toma una captura de pantalla": [
+      "scrot /home/ruben/wa-ollama/temp_files/captura.png → Command failed: scrot /home/ruben/wa-ollama/temp_files/captura.png\nscrot: Can't "
+    ],
+    "limpiar historial": [
+      "DISPLAY=:99 history -c → Command failed: DISPLAY=:99 history -c\n/bin/sh: 1: history: not found\n"
+    ],
+    "agente terminal: DISPLAY=:99 scrot /tmp/captura3.png && echo": [
+      "DISPLAY=:99 DISPLAY=:99 scrot /tmp/captura3.png && echo /tmp/captura3.png → MessageMedia is not a constructor"
+    ],
+    "DISPLAY=:99 xterm &\nsleep 2\nDISPLAY=:99 scrot /tmp/test_xter": [
+      "DISPLAY=:99 DISPLAY=:99 xterm & sleep 2; DISPLAY=:99 scrot /tmp/test_xterm.png → MessageMedia is not a constructor"
+    ],
+    "agente terminal: DISPLAY=:99 scrot /tmp/captura4.png && echo": [
+      "DISPLAY=:99 DISPLAY=:99 scrot /tmp/captura4.png && echo /tmp/captura4.png → MessageMedia is not a constructor"
+    ],
+    "Puedes darme una receta para hacer donas?": [
+      "DISPLAY=:99 echo 'Ingredientes: → Command failed: DISPLAY=:99 echo 'Ingredientes:\n/bin/sh: 1: Syntax error: Unterm"
+    ]
+  },
+  "archivos": {},
+  "errores_frecuentes": [],
+  "ultima_actualizacion": "2026-03-12T18:40:09.246Z"
+}

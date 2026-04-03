@@ -1,0 +1,10 @@
+[
+  {
+    "descripcion": "Intentar aprenderHabilidad(\"testX\", codigo)",
+    "codigo": "codigo",
+    "exito": true,
+    "error": null,
+    "salida": "Sintaxis correcta",
+    "fecha": "2026-02-27T17:28:34.209Z"
+  }
+]

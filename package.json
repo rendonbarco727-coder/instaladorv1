@@ -1,0 +1,39 @@
+{
+  "name": "wa-ollama",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@xenova/transformers": "^2.17.2",
+    "axios": "^1.13.5",
+    "better-sqlite3": "^12.6.2",
+    "docx": "^9.6.1",
+    "dotenv": "^17.3.1",
+    "duck-duck-scrape": "^2.2.7",
+    "express": "^5.2.1",
+    "fastify": "^5.8.2",
+    "fuse.js": "^7.1.0",
+    "gh": "^2.8.9",
+    "grep": "^0.1.0",
+    "img2pdf": "^1.0.11",
+    "moment": "^2.30.1",
+    "node-cron": "^4.2.1",
+    "p-queue": "^9.1.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.34.5",
+    "whatsapp-web.js": "^1.34.6",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.7"
+  }
+}
